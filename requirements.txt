@@ -1,7 +1,0 @@
-streamlit
-geemap
-earthengine-api
-pandas
-numpy
-xgboost
-scikit-learn
