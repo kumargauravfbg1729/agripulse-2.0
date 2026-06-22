@@ -1,0 +1,109 @@
+import streamlit as st
+import numpy as np
+import pickle
+import time
+import geemap.foliumap as geemap
+import ee
+
+# 1. Page Configuration
+st.set_page_config(page_title="AgriPulse 2.0 Dashboard", layout="wide")
+st.title(" AgriPulse 2.0: AI-Powered Irrigation Advisory")
+
+# Initialize Earth Engine if not already initialized
+try:
+    ee.Initialize()
+except Exception as e:
+    # Handle initialization if it fails (Streamlit cloud environment)
+    st.error("Earth Engine initialization failed. Please authenticate.")
+    st.stop()
+
+
+# 2. Mock Data (In a real app, this would be fetched live from GEE as you did earlier)
+# We are using mock values here for the Streamlit demo to avoid long GEE processing times on every click.
+mock_ndvi = 0.35
+mock_dprvic = 0.60
+mock_svadi = 0.75
+mock_et0 = 7.4  # mm/day
+mock_rainfall = 2.0 # mm over next 8 days
+
+
+# 3. Sidebar Configuration (Controls)
+st.sidebar.header("Farm Coordinates")
+lat = st.sidebar.number_input("Latitude", value=25.18)
+lon = st.sidebar.number_input("Longitude", value=76.46)
+
+st.sidebar.markdown("---")
+st.sidebar.header("Current Satellite Telemetry")
+st.sidebar.metric("NDVI (Greenness)", mock_ndvi)
+st.sidebar.metric("DpRVIc (Canopy Volume)", mock_dprvic)
+st.sidebar.metric("SVADI (Stress Index)", mock_svadi)
+
+
+# 4. Main Panel Layout
+col1, col2 = st.columns([2, 1])
+
+# Column 1: The Interactive Map
+with col1:
+    st.subheader("High-Resolution Satellite Scan (NDVI)")
+    # Generate Map
+    Map = geemap.Map(center=[lat, lon], zoom=15)
+    
+    # We add a generic map here for the demo. 
+    # In a fully deployed version, you would run the GEE image extraction here.
+    Map.add_basemap('SATELLITE')
+    Map.to_streamlit(height=500)
+
+
+# Column 2: AI Analytics & Recommendations
+with col2:
+    st.subheader("AI Farm Diagnostics")
+    
+    # Load the trained model
+    try:
+        with open('agripulse_model.pkl', 'rb') as f:
+            model = pickle.load(f)
+            
+        # Format input for the model
+        input_data = np.array([[mock_ndvi, mock_dprvic, mock_svadi]])
+        
+        with st.spinner("Analyzing satellite telemetry..."):
+            time.sleep(1.5) # Simulating processing time
+            prediction = model.predict(input_data)[0]
+            
+        # Interpret Prediction
+        if prediction == 0:
+            stage_text = "Healthy / Optimal"
+            color = "green"
+        elif prediction == 1:
+            stage_text = "High Moisture Stress"
+            color = "red"
+        else:
+            stage_text = "Bare Soil / Early Stage"
+            color = "orange"
+            
+        st.markdown(f"**Current Crop State:** <span style='color:{color}; font-size:1.2em;'>{stage_text}</span>", unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.subheader("Dynamic Water Calculator")
+        
+        # The Math (Dynamic Kc)
+        kc = (1.25 * mock_ndvi) + 0.2
+        etc = kc * mock_et0
+        total_demand_8days = etc * 8
+        net_deficit = total_demand_8days - mock_rainfall
+        
+        # Ensure deficit isn't negative
+        net_deficit = max(0, net_deficit)
+        
+        st.write(f"Dynamic Crop Coefficient (Kc): **{kc:.2f}**")
+        st.write(f"Forecasted ET0 (Daily): **{mock_et0} mm**")
+        st.write(f"Forecasted Rainfall (8-day): **{mock_rainfall} mm**")
+        
+        st.error(f" **Required Irrigation (Next 8 Days): {net_deficit:.1f} mm**")
+        
+        st.markdown("---")
+        st.subheader("GenAI Farmer Alert")
+        st.info(f"**Bhashini Bot Output:**\n\n'Ram-ram ji! Aapke khet mein fasal abhi stress mein hai. Agle 8 din barish kam hai, isliye turant motor chalakar {net_deficit:.1f} mm paani de dein.'")
+        
+    except FileNotFoundError:
+        st.error("Model file not found. Please run the training script first.")
