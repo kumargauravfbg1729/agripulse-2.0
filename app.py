@@ -1,24 +1,49 @@
 import streamlit as st
 import pickle
 import numpy as np
+import pandas as pd
 
+st.set_page_config(layout="wide") # Isse screen thodi wide aur professional lagegi
 st.title(" AgriPulse 2.0: AI Crop Inference Engine")
 
-# Sliders for Judges to test the data
-st.sidebar.header(" Raw Satellite & Sensor Inputs")
-ndvi_input = st.sidebar.slider("NDVI (Vegetation Index)", 0.0, 1.0, 0.5)
-dprvic_input = st.sidebar.slider("DpRVIc (Radar Backscatter)", 0.0, 1.0, 0.3)
-svadi_input = st.sidebar.slider("SVADI (Soil Moisture Index)", 0.0, 1.0, 0.7)
-kc_input = st.sidebar.slider("Kc (Crop Coefficient)", 0.0, 1.5, 1.1)
+# --- UI Layout: 2 Columns ---
+col1, col2 = st.columns([1, 2])
+
+with col1:
+    st.subheader(" Region Selector")
+    # Region dropdown
+    region = st.selectbox("Select Simulation Region:", 
+                          ["Bhopal, Madhya Pradesh", "Gorakhpur, Uttar Pradesh", "Kota, Rajasthan"])
+    
+    # Map coordinates dictionary
+    locations = {
+        "Bhopal, Madhya Pradesh": [23.2599, 77.4126],
+        "Gorakhpur, Uttar Pradesh": [26.7606, 83.3732],
+        "Kota, Rajasthan": [25.2138, 75.8648]
+    }
+    
+    # Display Map
+    lat, lon = locations[region]
+    map_data = pd.DataFrame({'lat': [lat], 'lon': [lon]})
+    st.map(map_data, zoom=10)
+
+with col2:
+    # Sliders for Judges to test the data
+    st.subheader(" Raw Satellite & Sensor Inputs")
+    ndvi_input = st.slider("NDVI (Vegetation Index)", 0.0, 1.0, 0.5)
+    dprvic_input = st.slider("DpRVIc (Radar Backscatter)", 0.0, 1.0, 0.3)
+    svadi_input = st.slider("SVADI (Soil Moisture Index)", 0.0, 1.0, 0.7)
+    kc_input = st.slider("Kc (Crop Coefficient)", 0.0, 1.5, 1.1)
 
 # AI Inference Block
+st.markdown("---")
 try:
     with open('crop_identifier_model.pkl', 'rb') as f:
         crop_model = pickle.load(f)
         
     input_features = np.array([[ndvi_input, dprvic_input, svadi_input, kc_input]])
 
-    if st.button(" Run AI Crop Identification"):
+    if st.button(" Run AI Crop Identification", use_container_width=True):
         # Real-time Prediction
         prediction_encoded = crop_model.predict(input_features)[0]
         probabilities = crop_model.predict_proba(input_features)[0]
@@ -28,13 +53,13 @@ try:
         
         # Display Outputs
         st.subheader(" Backend Model Output")
-        st.success(f"**Scientifically Identified Crop:** {detected_crop}")
+        st.success(f"**Scientifically Identified Crop:** {detected_crop} for {region}")
         
         # Confidence Levels
         st.write(f"**AI Confidence Level:** Rice ({probabilities[0]:.2%}), Wheat ({probabilities[1]:.2%}), Maize ({probabilities[2]:.2%})")
         
         # Actionable Advisory
-        st.subheader("Smart Irrigation Advisory")
+        st.subheader(" Smart Irrigation Advisory")
         if prediction_encoded == 0:
             st.info("Advisory: Rice signature detected. Maintain a 10-12 mm water level based on the current high SVADI profile.")
         elif prediction_encoded == 1:
