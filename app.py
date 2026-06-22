@@ -32,14 +32,14 @@ st.sidebar.title(" Control Panel")
 city = st.sidebar.selectbox("Select Target Region", ["Bhopal", "Gorakhpur", "Kota"])
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("📡 Raw Satellite Inputs")
+st.sidebar.subheader(" Raw Satellite Inputs")
 ndvi_input = st.sidebar.slider("NDVI (Vegetation Index)", 0.0, 1.0, 0.5)
 dprvic_input = st.sidebar.slider("DpRVIc (Radar)", 0.0, 1.0, 0.3)
 svadi_input = st.sidebar.slider("SVADI (Soil Moisture)", 0.0, 1.0, 0.7)
 kc_input = st.sidebar.slider("Kc (Crop Coefficient)", 0.0, 1.5, 1.1)
 
 # --- MAIN DASHBOARD ---
-st.title("🌾 AgriPulse AI: Precision Irrigation Engine")
+st.title(" AgriPulse AI: Precision Irrigation Engine")
 
 tab1, tab2 = st.tabs([" Precision Field Heatmap", " AI Engine & Farmer Advisory"])
 
