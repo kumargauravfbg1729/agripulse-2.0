@@ -1,80 +1,129 @@
 import streamlit as st
-import pickle
-import numpy as np
-import requests
+import folium
+from streamlit_folium import st_folium
+import plotly.graph_objects as go
 import plotly.express as px
-import urllib.parse  # Naya module jo message ko WhatsApp link mein badlega
+import pandas as pd
+import urllib.parse
 
-st.set_page_config(page_title="AgriPulse AI Dashboard", layout="wide")
+# Page Setup
+st.set_page_config(page_title="AgriPulse AI Premium", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SIDEBAR ---
-st.sidebar.title(" Control Panel")
-city = st.sidebar.selectbox("Select Target Region", ["Bhopal", "Gorakhpur", "Kota"])
+# Custom CSS to make it look exactly like your Architecture Diagram
+st.markdown("""
+<style>
+    .big-alert {
+        background-color: #fdf3e7;
+        border-left: 6px solid #f39c12;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+    }
+</style>
+""", unsafe_allow_html=True)
 
-st.sidebar.markdown("---")
-st.sidebar.subheader(" Raw Satellite Inputs")
-ndvi_input = st.sidebar.slider("NDVI (Vegetation Index)", 0.0, 1.0, 0.5)
-dprvic_input = st.sidebar.slider("DpRVIc (Radar)", 0.0, 1.0, 0.3)
-svadi_input = st.sidebar.slider("SVADI (Soil Moisture)", 0.0, 1.0, 0.7)
-kc_input = st.sidebar.slider("Kc (Crop Coefficient)", 0.0, 1.5, 1.1)
+# 1. HYBRID DATABASE (Crash-Proof Data)
+farm_database = {
+    "FARM-MP-01 (Bhopal)": {"lat": 23.2599, "lon": 77.4126, "ndvi": 0.75, "svadi": 0.20, "crop": "Wheat"},
+    "FARM-UP-02 (Gorakhpur)": {"lat": 26.7606, "lon": 83.3732, "ndvi": 0.82, "svadi": 0.65, "crop": "Rice"},
+    "FARM-RJ-03 (Kota)": {"lat": 25.2138, "lon": 75.8648, "ndvi": 0.45, "svadi": 0.15, "crop": "Maize"}
+}
 
-# --- MAIN DASHBOARD ---
-st.title(" AgriPulse AI: Precision Irrigation Engine")
+st.title(" AgriPulse AI: Farmer's Advisory Dashboard")
 
-tab1, tab2 = st.tabs([" Precision Field Heatmap", " AI Engine & WhatsApp Advisory"])
+# Top Selection Bar
+selected_farm = st.selectbox(" Select Target Farm:", list(farm_database.keys()))
+data = farm_database[selected_farm]
 
-# TAB 1: FAST HEATMAP
-with tab1:
-    st.subheader(f" Field Moisture X-Ray: {city} Farm")
-    
-    np.random.seed(42)
-    base_moisture = svadi_input * 100
-    farm_grid = base_moisture + np.random.normal(0, 15, (10, 10))
-    farm_grid = np.clip(farm_grid, 0, 100)
-    
-    dry_zone_name = "Purbi (East)" if svadi_input < 0.4 else "Uttari (North)" if svadi_input < 0.7 else "Dakshini (South)"
-    
-    fig = px.imshow(farm_grid, color_continuous_scale='RdYlBu', zmin=0, zmax=100)
-    fig.update_xaxes(visible=False)
-    fig.update_yaxes(visible=False)
-    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=350)
-    st.plotly_chart(fig, use_container_width=True)
+# Background Calculations (From your PDF)
+dynamic_kc = (1.25 * data['ndvi']) + 0.2
+et0 = 5.2 # Simulated Weather ET0
+deficit = round(max(0, (dynamic_kc * et0) - 0.5), 1) # Deficit Math
 
-# TAB 2: AI INFERENCE & DIRECT WHATSAPP
-with tab2:
-    st.subheader("AI Prediction Engine & Advisory")
+st.markdown("---")
+
+# Main Dashboard Layout (Matches your diagram)
+col1, col2 = st.columns([1.5, 1])
+
+# LEFT COLUMN: Interactive Map
+with col1:
+    st.subheader(" Precision Field Heatmap")
+    # Folium Map
+    m = folium.Map(location=[data['lat'], data['lon']], zoom_start=15, tiles="CartoDB positron")
+    # Adding a simulated heatmap zone (Red for dry, Green for wet)
+    zone_color = "red" if data['svadi'] < 0.4 else "green"
+    folium.CircleMarker(
+        location=[data['lat'], data['lon']],
+        radius=50,
+        color=zone_color,
+        fill=True,
+        fill_color=zone_color,
+        fill_opacity=0.4,
+        popup="Moisture Stress Zone"
+    ).add_to(m)
+    st_folium(m, width=650, height=400)
+
+# RIGHT COLUMN: Premium Analytics (Gauge Charts & Alerts)
+with col2:
+    st.subheader(" Farm Analytics")
     
-    # Heuristic Engine
-    if svadi_input >= 0.6 and ndvi_input > 0.4:
-        crop_name = "Rice (Dhaan)"
-        water_req = "10-12 mm"
-    elif 0.3 <= svadi_input < 0.6:
-        crop_name = "Wheat (Gehun)"
-        water_req = "4-5 mm"
-    else:
-        crop_name = "Maize (Makka)"
-        water_req = "2 ghante Drip irrigation"
-        
-    st.success(f"**Identified Crop:** {crop_name}")
-    st.info(f"**AI Field Translation:** Mitti khet ke **{dry_zone_name}** hisse mein sookh rahi hai.")
+    # Row for Speedometers (Gauges)
+    g1, g2 = st.columns(2)
     
-    st.markdown("---")
-    st.subheader(" Send Free Alert on WhatsApp")
+    with g1:
+        # Yield Health Score (NDVI)
+        fig_health = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = data['ndvi'] * 10,
+            title = {'text': "Yield Health Score"},
+            gauge = {'axis': {'range': [0, 10]}, 'bar': {'color': "green"}}
+        ))
+        fig_health.update_layout(height=200, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_health, use_container_width=True)
+
+    with g2:
+        # Current Moisture Level (SVADI)
+        fig_moisture = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = data['svadi'] * 100,
+            number = {'suffix': "%"},
+            title = {'text': "Current Moisture"},
+            gauge = {'axis': {'range': [0, 100]}, 'bar': {'color': "#3498db"}}
+        ))
+        fig_moisture.update_layout(height=200, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_moisture, use_container_width=True)
+
+    # THE BIG ACTIONABLE OUTPUT (Matches Diagram exactly)
+    st.markdown(f"""
+    <div class="big-alert">
+        <h3 style="margin:0; color:#d35400;"> REQUIRED IRRIGATION:</h3>
+        <h1 style="margin:0; color:#2c3e50;">{deficit} mm for next 8 days</h1>
+    </div>
+    """, unsafe_allow_html=True)
+
+# BOTTOM SECTION: 8-Day Forecast Bar Chart
+st.markdown("---")
+st.subheader(" 8-Day Rainfall Forecast")
+
+# Simulated Forecast Data
+forecast_data = pd.DataFrame({
+    "Day": ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7", "Day 8"],
+    "Rainfall (mm)": [0, 2, 0, 15, 30, 5, 0, 0]
+})
+
+fig_bar = px.bar(forecast_data, x="Day", y="Rainfall (mm)", color_discrete_sequence=['#3498db'])
+fig_bar.update_layout(height=250, margin=dict(l=0, r=0, t=10, b=0))
+st.plotly_chart(fig_bar, use_container_width=True)
+
+# WhatsApp Integration Button
+st.markdown("---")
+col_w1, col_w2 = st.columns([1, 2])
+with col_w1:
+    farmer_number = st.text_input("Farmer's WhatsApp No:", value="9876543210")
+with col_w2:
+    st.write("") # Spacing
+    st.write("")
+    whatsapp_msg = f"🌾 *AgriPulse AI*\nAapke {data['crop']} khet ({selected_farm}) mein agle 8 din ke liye *{deficit} mm* paani ki zarurat hai. Kripya dhyan dein!"
+    whatsapp_url = f"https://wa.me/91{farmer_number}?text={urllib.parse.quote(whatsapp_msg)}"
     
-    # Farmer ka number lene ke liye (Bina +91 ke)
-    farmer_number = st.text_input("Enter Farmer's 10-digit WhatsApp Number:", value="9876543210")
-    
-    # Message Ban banana
-    whatsapp_msg = f" *AgriPulse AI Alert*\nNamaskar! Aapke khet mein {crop_name} ki janch hui hai.\n Khet ke *{dry_zone_name}* hisse mein mitti sookh rahi hai.\n Kripya aaj wahan *{water_req}* paani dein.\nPaani bachayen, fasal badhayen!"
-    
-    # Message ko URL format mein encode karna
-    encoded_msg = urllib.parse.quote(whatsapp_msg)
-    
-    # WhatsApp ka direct link banana
-    whatsapp_url = f"https://wa.me/91{farmer_number}?text={encoded_msg}"
-    
-    # Ek sundar sa WhatsApp Button lagana (HTML ke zariye)
-    if len(farmer_number) == 10:
-        st.markdown(f'<a href="{whatsapp_url}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #25D366; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">💬 Send to Kisan on WhatsApp</a>', unsafe_allow_html=True)
-    else:
-        st.warning("Please enter a valid 10-digit number.")
+    st.markdown(f'<a href="{whatsapp_url}" target="_blank" style="display: inline-block; padding: 12px 24px; background-color: #25D366; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">💬 Send Direct WhatsApp Alert to Farmer</a>', unsafe_allow_html=True)
